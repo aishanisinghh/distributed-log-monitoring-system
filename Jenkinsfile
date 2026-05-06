@@ -48,12 +48,10 @@ pipeline {
         }
         
         stage('Deploy to AWS') {
-            when {
-                branch 'main'
-            }
             steps {
-                echo 'Deploying to AWS EC2...'
-                sh './scripts/deploy.sh'
+                sshagent(['aws-ssh-key']) {
+                    sh "ssh -o StrictHostKeyChecking=no ubuntu@52.72.144.115 'cd /home/ubuntu/distributed-log-monitoring-system && git pull && sudo ./scripts/deploy.sh'"
+                }
             }
         }
     }
