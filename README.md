@@ -10,10 +10,10 @@ This project streams logs from three microservices into Loki and surfaces them i
 - Dashboard frontend: Next.js UI for filtering and reading logs
 
 Key paths:
-- Services: [project/services](project/services)
-- Monitoring stack: [project/monitoring](project/monitoring)
-- Dashboard backend (FastAPI): [project/dashboard/backend](project/dashboard/backend)
-- Dashboard frontend (Next.js): [project/dashboard/frontend](project/dashboard/frontend)
+- Services: [services](services)
+- Monitoring stack: [monitoring](monitoring)
+- Dashboard backend (FastAPI): [dashboard/backend](dashboard/backend)
+- Dashboard frontend (Next.js): [dashboard/frontend](dashboard/frontend)
 
 ## Setup Guide
 
@@ -22,38 +22,24 @@ Key paths:
 - Node.js 18+
 - Python 3.11+
 
-### 1) Start Loki, Promtail, and Services
-The monitoring stack and three microservices are defined in [project/monitoring/docker-compose.yml](project/monitoring/docker-compose.yml).
+### 1) Start the entire stack
+You can now start everything with:
 ```bash
-cd project/monitoring
-docker-compose up --build
-```
+docker compose up --build
 
-### Run Services Only (without Loki/Promtail)
-If you want just the three microservices:
-```bash
-cd project/monitoring
-docker-compose up --build auth-service order-service payment-service
-```
 
-To stop them later:
+### 2) Run the FastAPI backend (Manual/Dev)
 ```bash
-cd project/monitoring
-docker-compose down
-```
-
-### 2) Run the FastAPI backend
-```bash
-cd project/dashboard/backend
+cd dashboard/backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 3) Run the Next.js frontend
+### 3) Run the Next.js frontend (Manual/Dev)
 ```bash
-cd project/dashboard/frontend
+cd dashboard/frontend
 npm install
 npm run dev
 ```
