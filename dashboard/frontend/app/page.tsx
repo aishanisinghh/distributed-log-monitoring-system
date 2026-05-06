@@ -221,7 +221,7 @@ export default function Dashboard() {
     entries.forEach((entry) => {
       const t = new Date(entry.timestamp).getTime();
       const idx = Math.floor((t - ago) / step);
-      if (idx >= 0 && idx < buckets) {
+      if (idx >= 0 && idx < buckets && data[idx]) {
         data[idx].total++;
         if (entry.level === "ERROR") data[idx].errors++;
       }
