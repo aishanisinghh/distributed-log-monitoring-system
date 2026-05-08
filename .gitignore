@@ -78,9 +78,25 @@ Thumbs.db
 *.swo
 *~
 
+# --- Terraform ---
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+_override.tf
+_override.tf.json
+.terraformrc
+terraform.rc
+
 # --- Project Specific ---
-# Loki data (persistent storage)
-project/monitoring/loki-data/
+# Loki persistent storage
+monitoring/loki-storage/
+monitoring/loki-data/
 *.log
 
 # Environment files
@@ -91,3 +107,8 @@ project/monitoring/loki-data/
 .env.production.local
 *.env*
 
+# Secrets
+*.pem
+*.key
+id_rsa
+id_rsa.pub

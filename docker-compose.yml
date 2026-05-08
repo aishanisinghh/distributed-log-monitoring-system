@@ -1,0 +1,72 @@
+version: "3.8"
+
+services:
+  # Monitoring Stack
+  loki:
+    image: grafana/loki:2.9.0
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/loki-config.yaml
+    volumes:
+      - ./monitoring/loki-config.yaml:/etc/loki/loki-config.yaml
+      - ./monitoring/loki-storage:/loki
+      - ./monitoring/loki-storage/wal:/wal
+
+  promtail:
+    image: grafana/promtail:2.9.0
+    restart: unless-stopped
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./monitoring/promtail-config.yaml:/etc/promtail/promtail-config.yaml
+    command: -config.file=/etc/promtail/promtail-config.yaml
+    depends_on:
+      - loki
+
+  # Microservices
+  auth-service:
+    build: ./services/auth-service
+    restart: unless-stopped
+    ports:
+      - "5001:5000"
+
+  order-service:
+    build: ./services/order-service
+    restart: unless-stopped
+    ports:
+      - "5002:5000"
+
+  payment-service:
+    build: ./services/payment-service
+    restart: unless-stopped
+    ports:
+      - "5003:5000"
+
+  # Dashboard Backend
+  dashboard-backend:
+    build: ./dashboard/backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - LOKI_URL=http://loki:3100
+      - AUTH_SERVICE_URL=http://auth-service:5000/health
+      - ORDER_SERVICE_URL=http://order-service:5000/health
+      - PAYMENT_SERVICE_URL=http://payment-service:5000/health
+    depends_on:
+      - loki
+      - auth-service
+      - order-service
+      - payment-service
+
+  # Dashboard Frontend
+  dashboard-frontend:
+    build:
+      context: ./dashboard/frontend
+      args:
+        - NEXT_PUBLIC_API_URL=http://100.30.202.183:8000
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - dashboard-backend

@@ -1,102 +1,270 @@
 # Distributed Log Monitoring System
 
-## Overview
-This project streams logs from three microservices into Loki and surfaces them in a dashboard. The dashboard backend is built with FastAPI and the frontend is built with Next.js.
+A production-ready distributed log monitoring stack that streams structured JSON logs from multiple microservices into Loki and surfaces them in a real-time dashboard.
+
+---
 
 ## Architecture
-- Microservices: Auth, Order, Payment (generate JSON logs to stdout)
-- Log pipeline: Promtail tails Docker container logs into Loki
-- Dashboard backend: FastAPI API to query Loki
-- Dashboard frontend: Next.js UI for filtering and reading logs
 
-Key paths:
-- Services: [project/services](project/services)
-- Monitoring stack: [project/monitoring](project/monitoring)
-- Dashboard backend (FastAPI): [project/dashboard/backend](project/dashboard/backend)
-- Dashboard frontend (Next.js): [project/dashboard/frontend](project/dashboard/frontend)
-
-## Setup Guide
-
-### Prerequisites
-- Docker and Docker Compose
-- Node.js 18+
-- Python 3.11+
-
-### 1) Start Loki, Promtail, and Services
-The monitoring stack and three microservices are defined in [project/monitoring/docker-compose.yml](project/monitoring/docker-compose.yml).
-```bash
-cd project/monitoring
-docker-compose up --build
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        Services                             │
+│  auth-service :5001   order-service :5002   payment-service :5003  │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ stdout logs
+                    ┌──────▼───────┐
+                    │   Promtail   │  (tails Docker container logs)
+                    └──────┬───────┘
+                           │ push
+                    ┌──────▼───────┐
+                    │     Loki     │  :3100
+                    └──────┬───────┘
+                           │ query
+                    ┌──────▼───────┐
+                    │   FastAPI    │  dashboard-backend :8000
+                    └──────┬───────┘
+                           │
+                    ┌──────▼───────┐
+                    │   Next.js    │  dashboard-frontend :3000
+                    └──────────────┘
 ```
 
-### Run Services Only (without Loki/Promtail)
-If you want just the three microservices:
+| Service              | Port  | Description                              |
+|----------------------|-------|------------------------------------------|
+| dashboard-frontend   | 3000  | Next.js UI — log viewer & health cards   |
+| dashboard-backend    | 8000  | FastAPI — queries Loki, exposes REST API  |
+| loki                 | 3100  | Log aggregation store                    |
+| auth-service         | 5001  | Sample microservice (generates logs)     |
+| order-service        | 5002  | Sample microservice (generates logs)     |
+| payment-service      | 5003  | Sample microservice (generates logs)     |
+| promtail             | —     | Ships container logs to Loki             |
+
+---
+
+## Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) & Docker Compose v2+
+- Git
+
+---
+
+## Quick Start (Docker — Recommended)
+
+### ▶ Start all services (fresh / clean build)
+
 ```bash
-cd project/monitoring
-docker-compose up --build auth-service order-service payment-service
+# Pull latest code
+git pull
+
+# Build images and start all containers in the background
+docker compose up --build -d
 ```
 
-To stop them later:
+> First run takes a few minutes while Docker builds images and pulls base layers.
+
+### ▶ Start without rebuilding (subsequent runs)
+
 ```bash
-cd project/monitoring
-docker-compose down
+docker compose up -d
 ```
 
-### 2) Run the FastAPI backend
+### ⏹ Stop all services (keep data)
+
 ```bash
-cd project/dashboard/backend
+docker compose down
+```
+
+### ⏹ Stop all services and remove volumes (full clean reset)
+
+```bash
+docker compose down -v --remove-orphans
+```
+
+> ⚠️ This deletes all Loki-stored log data. Use this to start completely fresh.
+
+### 🔄 Restart a single service
+
+```bash
+# Replace <service> with: loki, promtail, auth-service, order-service, payment-service, dashboard-backend, dashboard-frontend
+docker compose restart <service>
+```
+
+### 🗑 Nuke everything and rebuild from scratch
+
+```bash
+docker compose down -v --remove-orphans
+docker compose up --build -d
+```
+
+---
+
+## View Logs
+
+```bash
+# All services
+docker compose logs -f
+
+# Specific service
+docker compose logs -f dashboard-backend
+docker compose logs -f auth-service
+```
+
+---
+
+## Service Status
+
+```bash
+docker compose ps
+```
+
+---
+
+## Access Points
+
+| URL                          | Description              |
+|------------------------------|--------------------------|
+| http://localhost:3000        | Dashboard UI             |
+| http://localhost:8000/health | Backend health check     |
+| http://localhost:8000/docs   | FastAPI Swagger UI       |
+| http://localhost:3100/ready  | Loki readiness probe     |
+
+---
+
+## Manual / Dev Mode (without Docker)
+
+### Backend (FastAPI)
+
+```bash
+cd dashboard/backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 3) Run the Next.js frontend
+### Frontend (Next.js)
+
 ```bash
-cd project/dashboard/frontend
+cd dashboard/frontend
 npm install
 npm run dev
 ```
 
 Open http://localhost:3000 to view the dashboard.
 
-### 4) Validate the pipeline
-- Verify Loki is reachable: http://localhost:3100/ready
-- Confirm the backend health endpoint: http://localhost:8000/health
-- The dashboard shows service health cards and log counts.
+---
 
-## Configuration
+## API Reference
 
-### Frontend
-- `NEXT_PUBLIC_API_URL`: Override the FastAPI base URL for the frontend (default: `http://localhost:8000`).
+| Method | Endpoint   | Description                                      |
+|--------|------------|--------------------------------------------------|
+| GET    | `/`        | Root health check                                |
+| GET    | `/health`  | Loki + all service health summary                |
+| GET    | `/services`| List of known services                           |
+| GET    | `/logs`    | Query logs (`service`, `level`, `since`, `search`, `limit`) |
+| GET    | `/errors`  | Shortcut for error-level logs                    |
 
-### Backend
-- `LOKI_URL`: Loki base URL (default: `http://localhost:3100`).
-- `AUTH_SERVICE_URL`: Auth service health endpoint (default: `http://localhost:5001/health`).
-- `ORDER_SERVICE_URL`: Order service health endpoint (default: `http://localhost:5002/health`).
-- `PAYMENT_SERVICE_URL`: Payment service health endpoint (default: `http://localhost:5003/health`).
-- `HEALTH_TIMEOUT`: Timeout in seconds for health checks (default: `2.5`).
+**Example log query:**
+```
+GET http://localhost:8000/logs?service=auth-service&level=error&since=1h&limit=100
+```
 
-## API Endpoints
-- `GET /`: Health check
-- `GET /health`: Loki + service health summary
-- `GET /services`: Known services list
-- `GET /logs`: Query logs with filters
-	- Query params: `service`, `level`, `since` (e.g. `15m`, `1h`, `6h`), `search`, `limit`
-- `GET /errors`: Convenience endpoint for error-level logs
+---
 
-## Ports
-- 3000: Next.js dashboard
-- 8000: FastAPI backend
-- 3100: Loki
-- 5001: Auth service
-- 5002: Order service
-- 5003: Payment service
+## Environment Variables
+
+### Backend (`dashboard-backend`)
+
+| Variable            | Default                          | Description                        |
+|---------------------|----------------------------------|------------------------------------|
+| `LOKI_URL`          | `http://loki:3100`               | Loki base URL                      |
+| `AUTH_SERVICE_URL`  | `http://auth-service:5000/health`| Auth health endpoint               |
+| `ORDER_SERVICE_URL` | `http://order-service:5000/health`| Order health endpoint             |
+| `PAYMENT_SERVICE_URL`| `http://payment-service:5000/health`| Payment health endpoint        |
+| `HEALTH_TIMEOUT`    | `2.5`                            | Health check timeout (seconds)     |
+
+### Frontend (`dashboard-frontend`)
+
+| Variable              | Default                  | Description             |
+|-----------------------|--------------------------|-------------------------|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000`  | FastAPI backend base URL|
+
+---
+
+## CI/CD Pipeline (Jenkins)
+
+The project ships with a `Jenkinsfile` that automates the full delivery pipeline:
+
+```
+Checkout → SonarQube Analysis → Build & Test → Deploy to Staging → Deploy to AWS
+```
+
+### Jenkins Credentials Required
+
+| Credential ID  | Type                    | Description                          |
+|----------------|-------------------------|--------------------------------------|
+| `sonar-token`  | Secret text             | SonarQube authentication token       |
+| `aws-ec2-key`  | SSH Username + Private Key | EC2 `.pem` key, username: `ubuntu` |
+
+### Add `aws-ec2-key` in Jenkins
+
+1. **Manage Jenkins → Credentials → (global) → Add Credentials**
+2. Kind: **SSH Username with private key**
+3. ID: `aws-ec2-key`
+4. Username: `ubuntu`
+5. Private Key: paste contents of your `.pem` file
+6. Save
+
+---
+
+## AWS Deployment
+
+The Jenkins pipeline SSHs into your EC2 instance and runs `scripts/deploy.sh`:
+
+```bash
+# On the EC2 instance (ubuntu@<EC2-IP>)
+cd /home/ubuntu/distributed-log-monitoring-system
+git pull
+sudo ./scripts/deploy.sh
+```
+
+`deploy.sh` installs Docker + Docker Compose (if needed) and runs:
+
+```bash
+sudo docker-compose up -d --build
+```
+
+---
 
 ## Troubleshooting
-- No logs in the UI: ensure Docker is running and Promtail can read container logs from `/var/lib/docker/containers` on the host.
-- Health cards show down: confirm the services are up in [project/monitoring/docker-compose.yml](project/monitoring/docker-compose.yml) and the ports above are free.
-- Loki not ready: wait a few seconds after `docker-compose up` before the dashboard fetch.
 
-## Notes
-- Each microservice emits JSON logs with `service`, `level`, `message`, and `timestamp` fields. The backend parses these fields for the dashboard UI.
+| Symptom                       | Fix                                                                 |
+|-------------------------------|---------------------------------------------------------------------|
+| No logs appearing in UI       | Ensure Promtail can read `/var/lib/docker/containers` on the host   |
+| Health cards show "down"      | Check `docker compose ps` — all services must be `running`         |
+| Loki not ready                | Wait ~10s after startup, then refresh. Check `docker compose logs loki` |
+| Port already in use           | Stop conflicting process or change port in `docker-compose.yml`    |
+| Fresh start needed            | Run `docker compose down -v --remove-orphans && docker compose up --build -d` |
+
+---
+
+## Project Structure
+
+```
+.
+├── services/
+│   ├── auth-service/       # Flask microservice
+│   ├── order-service/      # Flask microservice
+│   └── payment-service/    # Flask microservice
+├── monitoring/
+│   ├── loki-config.yaml
+│   └── promtail-config.yaml
+├── dashboard/
+│   ├── backend/            # FastAPI app
+│   └── frontend/           # Next.js app
+├── scripts/
+│   └── deploy.sh           # AWS EC2 deployment script
+├── docker-compose.yml
+├── Jenkinsfile
+└── sonar-project.properties
+```
